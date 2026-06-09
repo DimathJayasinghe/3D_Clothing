@@ -12,19 +12,24 @@ import subprocess
 import logging
 
 logger = logging.getLogger(__name__)
-DEFAULT_TARGET_FACES = 40000
+DEFAULT_TARGET_FACES = 70000
 
 
 def get_mesh_info(filepath):
     """Get basic mesh info (face count, vertex count, file size)."""
+    file_size = os.path.getsize(filepath) if os.path.exists(filepath) else 0
     try:
         scene = trimesh.load(filepath, force="scene")
         faces = sum(len(g.faces) for g in scene.geometry.values() if hasattr(g, "faces"))
         verts = sum(len(g.vertices) for g in scene.geometry.values() if hasattr(g, "vertices"))
-        return {"faces": faces, "vertices": verts, "file_size": os.path.getsize(filepath)}
+        return {"faces": faces, "vertices": verts, "file_size": file_size}
     except Exception:
-        mesh = trimesh.load(filepath, force="mesh")
-        return {"faces": len(mesh.faces), "vertices": len(mesh.vertices), "file_size": os.path.getsize(filepath)}
+        try:
+            mesh = trimesh.load(filepath, force="mesh")
+            return {"faces": len(mesh.faces), "vertices": len(mesh.vertices), "file_size": file_size}
+        except Exception as e:
+            logger.warning(f"trimesh could not parse mesh to count faces (likely due to webp/meshopt compression): {e}")
+            return {"faces": 0, "vertices": 0, "file_size": file_size}
 
 
 def optimize_mesh(input_path, output_path, target_faces=DEFAULT_TARGET_FACES, apply_draco=False):
@@ -48,15 +53,29 @@ def optimize_mesh(input_path, output_path, target_faces=DEFAULT_TARGET_FACES, ap
     
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    # Use gltf-transform to simplify the mesh. 
-    # This natively preserves PBR materials, textures, and normals perfectly!
+    # We can chain gltf-transform commands to optimize heavily!
+    # 1. weld: merge coincident vertices
+    # 2. resize: downscale massive 4K/2K textures to 1024x1024
+    # 3. simplify: reduce polygon count
     try:
+        # Step 1: Resize textures safely
+        subprocess.run(
+            [
+                "npx", "-y", "@gltf-transform/cli", "resize", 
+                input_path, output_path, 
+                "--width", "1024", "--height", "1024"
+            ],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        # Step 2: Decimate mesh safely without aggressive welding that destroys the shell
         subprocess.run(
             [
                 "npx", "-y", "@gltf-transform/cli", "simplify", 
-                input_path, output_path, 
+                output_path, output_path, 
                 "--ratio", str(ratio), 
-                "--error", "0.05"
+                "--error", "0.01"
             ],
             check=True,
             capture_output=True,

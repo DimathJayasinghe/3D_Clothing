@@ -66,20 +66,24 @@ class TripoClient:
         elapsed = 0.0
         async with httpx.AsyncClient(timeout=30.0) as client:
             while elapsed < max_wait:
-                response = await client.get(f"{BASE_URL}/task/{task_id}", headers=self.headers)
-                if response.status_code != 200:
-                    raise TripoError(f"Poll failed ({response.status_code}): {response.text}")
-                data = response.json()
-                if data.get("code") != 0:
-                    raise TripoError(f"Poll API error: {data}")
-                task_data = data["data"]
-                status = task_data.get("status")
-                progress = task_data.get("progress", 0)
-                logger.info(f"Task {task_id}: status={status}, progress={progress}%")
-                if status == "success":
-                    return task_data
-                elif status in ("failed", "banned", "expired", "cancelled", "unknown"):
-                    raise TripoError(f"Task {task_id} ended with status: {status}")
+                try:
+                    response = await client.get(f"{BASE_URL}/task/{task_id}", headers=self.headers)
+                    if response.status_code != 200:
+                        raise TripoError(f"Poll failed ({response.status_code}): {response.text}")
+                    data = response.json()
+                    if data.get("code") != 0:
+                        raise TripoError(f"Poll API error: {data}")
+                    task_data = data["data"]
+                    status = task_data.get("status")
+                    progress = task_data.get("progress", 0)
+                    logger.info(f"Task {task_id}: status={status}, progress={progress}%")
+                    if status == "success":
+                        return task_data
+                    elif status in ("failed", "banned", "expired", "cancelled", "unknown"):
+                        raise TripoError(f"Task {task_id} ended with status: {status}")
+                except httpx.RequestError as e:
+                    logger.warning(f"Network error during poll for task {task_id}: {e}. Retrying...")
+                
                 await asyncio.sleep(poll_interval)
                 elapsed += poll_interval
         raise TripoError(f"Task {task_id} timed out after {max_wait}s")
