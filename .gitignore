@@ -1,2 +1,7 @@
 .env
 __pycache__/
+*.pyc
+uploads/
+static/models/
+meshes.db
+.venv/
