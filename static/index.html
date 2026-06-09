@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Mesh Studio</title>
+    <meta name="description" content="Upload a shirt photo and get an interactive 3D model using AI.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        :root {
+            --bg: #0a0a0f;
+            --bg2: #12121a;
+            --card: #1a1a2e;
+            --border: rgba(255, 255, 255, 0.06);
+            --border-h: rgba(255, 255, 255, 0.12);
+            --text: #f0f0f5;
+            --text2: #8888a0;
+            --muted: #555570;
+            --accent: #7c5cfc;
+            --accent-h: #9b7eff;
+            --glow: rgba(124, 92, 252, 0.25);
+            --ok: #34d399;
+            --warn: #fbbf24;
+            --err: #f87171;
+            --r: 16px;
+            --rs: 10px;
+            --t: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at 30% 20%, rgba(124, 92, 252, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 80%, rgba(52, 211, 153, 0.05) 0%, transparent 50%);
+            animation: bg 20s ease-in-out infinite alternate;
+            z-index: 0;
+            pointer-events: none
+        }
+
+        @keyframes bg {
+            0% {
+                transform: translate(0, 0)
+            }
+
+            100% {
+                transform: translate(-5%, 5%) rotate(3deg)
+            }
+        }
+
+        .app {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem 0
+        }
+
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            gap: .75rem;
+            margin-bottom: 1rem
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent), var(--ok));
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 0 30px var(--glow)
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--text), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text
+        }
+
+        .subtitle {
+            color: var(--text2);
+            font-size: .95rem;
+            margin-top: .5rem
+        }
+
+        .upload-section {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--r);
+            padding: 2.5rem;
+            margin-bottom: 2.5rem;
+            backdrop-filter: blur(20px);
+            transition: border-color var(--t)
+        }
+
+        .upload-section:hover {
+            border-color: var(--border-h)
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: var(--rs);
+            padding: 3rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--t)
+        }
+
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: var(--accent);
+            background: rgba(124, 92, 252, 0.05)
+        }
+
+        .upload-zone-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: .6
+        }
+
+        .upload-zone p {
+            color: var(--text2);
+            font-size: .9rem
+        }
+
+        .browse-link {
+            color: var(--accent);
+            text-decoration: underline;
+            cursor: pointer
+        }
+
+        #file-input {
+            display: none
+        }
+
+        .preview-container {
+            display: none;
+            margin-top: 1.5rem;
+            gap: 1.5rem;
+            align-items: center
+        }
+
+        .preview-container.active {
+            display: flex
+        }
+
+        .preview-image {
+            width: 120px;
+            height: 120px;
+            object-fit: cover;
+            border-radius: var(--rs);
+            border: 2px solid var(--border)
+        }
+
+        .preview-info {
+            flex: 1
+        }
+
+        .preview-name {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: .25rem
+        }
+
+        .preview-size {
+            color: var(--text2);
+            font-size: .85rem
+        }
+
+        .form-row {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            align-items: end
+        }
+
+        .form-group {
+            flex: 1
+        }
+
+        .form-group label {
+            display: block;
+            font-size: .8rem;
+            font-weight: 500;
+            color: var(--text2);
+            margin-bottom: .5rem;
+            text-transform: uppercase;
+            letter-spacing: .05em
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: .75rem 1rem;
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: var(--rs);
+            color: var(--text);
+            font-family: inherit;
+            font-size: .9rem;
+            transition: border-color var(--t);
+            outline: none
+        }
+
+        .form-group input:focus {
+            border-color: var(--accent)
+        }
+
+        .btn-gen {
+            padding: .75rem 2rem;
+            background: linear-gradient(135deg, var(--accent), #6246ea);
+            color: #fff;
+            border: none;
+            border-radius: var(--rs);
+            font-family: inherit;
+            font-size: .9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--t);
+            white-space: nowrap
+        }
+
+        .btn-gen:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px var(--glow)
+        }
+
+        .btn-gen:disabled {
+            opacity: .5;
+            cursor: not-allowed
+        }
+
+        .status-bar {
+            display: none;
+            margin-top: 1.5rem;
+            padding: 1rem 1.25rem;
+            background: var(--bg2);
+            border-radius: var(--rs);
+            border: 1px solid var(--border);
+            align-items: center;
+            gap: 1rem
+        }
+
+        .status-bar.active {
+            display: flex
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin .8s linear infinite
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        .status-text {
+            font-size: .9rem;
+            color: var(--text2)
+        }
+
+        .status-text strong {
+            color: var(--text)
+        }
+
+        .models-section h2 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: .5rem
+        }
+
+        .model-count {
+            background: var(--accent);
+            color: #fff;
+            font-size: .7rem;
+            font-weight: 700;
+            padding: .2rem .5rem;
+            border-radius: 20px
+        }
+
+        .models-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 1.5rem
+        }
+
+        .model-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--r);
+            overflow: hidden;
+            transition: all var(--t);
+            animation: fadeUp .5s ease both
+        }
+
+        .model-card:hover {
+            border-color: var(--border-h);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, .3)
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        .mv-container {
+            width: 100%;
+            height: 300px;
+            background: var(--bg2)
+        }
+
+        .mv-container model-viewer {
+            width: 100%;
+            height: 100%;
+            --poster-color: transparent
+        }
+
+        .model-processing {
+            width: 100%;
+            height: 300px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            background: var(--bg2)
+        }
+
+        .proc-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite
+        }
+
+        .proc-text {
+            color: var(--text2);
+            font-size: .85rem
+        }
+
+        .model-info {
+            padding: 1.25rem
+        }
+
+        .model-name {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: .5rem
+        }
+
+        .model-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .75rem;
+            margin-bottom: 1rem
+        }
+
+        .meta-tag {
+            font-size: .75rem;
+            color: var(--muted);
+            background: rgba(255, 255, 255, 0.03);
+            padding: .3rem .6rem;
+            border-radius: 6px;
+            border: 1px solid var(--border)
+        }
+
+        .meta-tag span {
+            color: var(--text2);
+            font-weight: 500
+        }
+
+        .model-actions {
+            display: flex;
+            gap: .5rem
+        }
+
+        .btn-act {
+            flex: 1;
+            padding: .5rem;
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: var(--rs);
+            color: var(--text2);
+            font-family: inherit;
+            font-size: .8rem;
+            cursor: pointer;
+            transition: all var(--t);
+            text-align: center;
+            text-decoration: none
+        }
+
+        .btn-act:hover {
+            border-color: var(--accent);
+            color: var(--accent)
+        }
+
+        .btn-del:hover {
+            border-color: var(--err);
+            color: var(--err)
+        }
+
+        .badge {
+            display: inline-block;
+            padding: .2rem .5rem;
+            border-radius: 6px;
+            font-size: .7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .05em
+        }
+
+        .badge-ok {
+            background: rgba(52, 211, 153, 0.15);
+            color: var(--ok)
+        }
+
+        .badge-proc {
+            background: rgba(251, 191, 36, 0.15);
+            color: var(--warn)
+        }
+
+        .badge-err {
+            background: rgba(248, 113, 113, 0.15);
+            color: var(--err)
+        }
+
+        .empty {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--muted)
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: .3
+        }
+
+        .toast-box {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: .5rem
+        }
+
+        .toast {
+            padding: .75rem 1.25rem;
+            border-radius: var(--rs);
+            font-size: .85rem;
+            animation: slideIn .3s ease;
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border)
+        }
+
+        .toast-success {
+            background: rgba(52, 211, 153, 0.15);
+            color: var(--ok)
+        }
+
+        .toast-error {
+            background: rgba(248, 113, 113, 0.15);
+            color: var(--err)
+        }
+
+        .toast-info {
+            background: rgba(124, 92, 252, 0.15);
+            color: var(--accent)
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1
+            }
+        }
+
+        @media(max-width:600px) {
+            .app {
+                padding: 1rem
+            }
+
+            .form-row {
+                flex-direction: column
+            }
+
+            .models-grid {
+                grid-template-columns: 1fr
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">🧊</div>
+                <h1>3D Mesh Studio</h1>
+            </div>
+            <p class="subtitle">Upload a shirt photo. Get an interactive 3D model in seconds.</p>
+        </header>
+        <section class="upload-section" id="upload-section">
+            <div class="upload-zone" id="upload-zone">
+                <div class="upload-zone-icon">📸</div>
+                <p><strong>Drop your shirt photo here</strong></p>
+                <p>or <span class="browse-link">browse files</span></p>
+                <p style="margin-top:.5rem;font-size:.8rem;color:var(--muted)">JPEG, PNG, or WebP — max 10MB</p>
+                <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp">
+            </div>
+            <div class="preview-container" id="preview-container">
+                <img class="preview-image" id="preview-image" alt="Preview">
+                <div class="preview-info">
+                    <div class="preview-name" id="preview-name"></div>
+                    <div class="preview-size" id="preview-size"></div>
+                </div>
+            </div>
+            <div class="form-row" id="form-row" style="display:none">
+                <div class="form-group">
+                    <label for="model-name">Model Name</label>
+                    <input type="text" id="model-name" value="My Shirt" placeholder="e.g., Blue Oxford Shirt">
+                </div>
+                <button class="btn-gen" id="btn-gen" onclick="startGeneration()">✨ Generate 3D Model</button>
+            </div>
+            <div class="status-bar" id="status-bar">
+                <div class="spinner"></div>
+                <div class="status-text" id="status-text">Uploading image...</div>
+            </div>
+        </section>
+        <section class="models-section">
+            <h2>🗂 Your Models <span class="model-count" id="model-count">0</span></h2>
+            <div class="models-grid" id="models-grid">
+                <div class="empty" id="empty-state">
+                    <div class="empty-icon">🧊</div>
+                    <p>No models yet. Upload a shirt photo to get started!</p>
+                </div>
+            </div>
+        </section>
+    </div>
+    <div class="toast-box" id="toast-box"></div>
+    <script>
+        let selectedFile = null, polls = {};
+        const zone = document.getElementById('upload-zone'), fi = document.getElementById('file-input');
+        zone.addEventListener('click', () => fi.click());
+        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover') });
+        zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+        zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]) });
+        fi.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]) });
+
+        function handleFile(f) {
+            if (!['image/jpeg', 'image/png', 'image/webp'].includes(f.type)) { toast('Upload JPEG, PNG, or WebP.', 'error'); return }
+            if (f.size > 10 * 1024 * 1024) { toast('File too large. Max 10MB.', 'error'); return }
+            selectedFile = f;
+            const r = new FileReader();
+            r.onload = e => {
+                document.getElementById('preview-image').src = e.target.result;
+                document.getElementById('preview-name').textContent = f.name;
+                document.getElementById('preview-size').textContent = fmtSize(f.size);
+                document.getElementById('preview-container').classList.add('active');
+                document.getElementById('form-row').style.display = 'flex';
+            };
+            r.readAsDataURL(f);
+        }
+
+        async function startGeneration() {
+            if (!selectedFile) { toast('Select an image first.', 'error'); return }
+            const btn = document.getElementById('btn-gen'), sb = document.getElementById('status-bar'), st = document.getElementById('status-text');
+            btn.disabled = true; sb.classList.add('active'); st.innerHTML = '<strong>Uploading</strong> image...';
+            const fd = new FormData();
+            fd.append('file', selectedFile);
+            fd.append('name', document.getElementById('model-name').value || 'Shirt Model');
+            try {
+                const res = await fetch('/api/upload', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Upload failed');
+                toast('Generation started! ~1-3 minutes.', 'info');
+                st.innerHTML = '<strong>Processing</strong> — Tripo3D generating 3D model...';
+                startPolling(data.model_id);
+                selectedFile = null; fi.value = '';
+                document.getElementById('preview-container').classList.remove('active');
+                document.getElementById('form-row').style.display = 'none';
+                loadModels();
+            } catch (e) { toast(e.message, 'error'); sb.classList.remove('active') }
+            finally { btn.disabled = false }
+        }
+
+        function startPolling(id) {
+            if (polls[id]) return;
+            polls[id] = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/models/${id}`);
+                    const m = await res.json();
+                    if (m.status === 'ready') {
+                        clearInterval(polls[id]); delete polls[id];
+                        toast(`"${m.name}" is ready! 🎉`, 'success');
+                        document.getElementById('status-bar').classList.remove('active');
+                        loadModels();
+                    } else if (m.status && m.status.startsWith('error')) {
+                        clearInterval(polls[id]); delete polls[id];
+                        toast(`Error: ${m.status}`, 'error');
+                        document.getElementById('status-bar').classList.remove('active');
+                        loadModels();
+                    } else {
+                        const map = { processing: 'Preparing...', generating: 'Tripo3D generating mesh...', optimizing: 'Optimizing for web...' };
+                        document.getElementById('status-text').innerHTML = `<strong>${m.status}</strong> — ${map[m.status] || 'Working...'}`;
+                    }
+                } catch (e) { }
+            }, 3000);
+        }
+
+        async function loadModels() {
+            try {
+                const res = await fetch('/api/models');
+                const data = await res.json();
+                renderModels(data.models || []);
+                (data.models || []).forEach(m => {
+                    if (m.status !== 'ready' && !m.status?.startsWith('error')) startPolling(m.id);
+                });
+            } catch (e) { console.error(e) }
+        }
+
+        function renderModels(models) {
+            const grid = document.getElementById('models-grid');
+            document.getElementById('model-count').textContent = models.length;
+            if (!models.length) {
+                grid.innerHTML = '<div class="empty"><div class="empty-icon">🧊</div><p>No models yet. Upload a shirt photo!</p></div>';
+                return;
+            }
+            grid.innerHTML = models.map((m, i) => {
+                const ready = m.status === 'ready' && m.filepath, err = m.status?.startsWith('error');
+                let viewer;
+                if (ready) viewer = `<div class="mv-container"><model-viewer src="${m.filepath}" alt="${m.name}" auto-rotate camera-controls shadow-intensity="1" environment-image="neutral"></model-viewer></div>`;
+                else if (err) viewer = `<div class="model-processing"><div style="font-size:2rem">❌</div><div class="proc-text">Generation failed</div></div>`;
+                else viewer = `<div class="model-processing"><div class="proc-spinner"></div><div class="proc-text">Generating 3D model...</div></div>`;
+                let bc = 'badge-proc'; if (ready) bc = 'badge-ok'; else if (err) bc = 'badge-err';
+                let meta = '';
+                if (m.optimized_faces) meta += `<span class="meta-tag">🔺 <span>${m.optimized_faces.toLocaleString()}</span> faces</span>`;
+                if (m.optimized_size_bytes) meta += `<span class="meta-tag">📦 <span>${fmtSize(m.optimized_size_bytes)}</span></span>`;
+                if (m.original_faces && m.optimized_faces) { const r = ((1 - m.optimized_faces / m.original_faces) * 100).toFixed(0); meta += `<span class="meta-tag">⚡ <span>${r}%</span> reduced</span>`; }
+                return `<div class="model-card" style="animation-delay:${i * 0.1}s">${viewer}<div class="model-info"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem"><div class="model-name">${m.name}</div><span class="badge ${bc}">${err ? 'Error' : m.status}</span></div><div class="model-meta">${meta}</div><div class="model-actions">${ready ? `<a class="btn-act" href="${m.filepath}" download>⬇ Download</a>` : ''}<button class="btn-act btn-del" onclick="delModel(${m.id})">🗑 Delete</button></div></div></div>`;
+            }).join('');
+        }
+
+        async function delModel(id) {
+            if (!confirm('Delete this model?')) return;
+            try { await fetch(`/api/models/${id}`, { method: 'DELETE' }); toast('Deleted.', 'info'); loadModels() }
+            catch (e) { toast('Delete failed.', 'error') }
+        }
+
+        function fmtSize(b) { if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(1) + ' KB'; return (b / 1048576).toFixed(1) + ' MB' }
+        function toast(msg, type = 'info') {
+            const c = document.getElementById('toast-box'), t = document.createElement('div');
+            t.className = `toast toast-${type}`; t.textContent = msg; c.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300) }, 4000);
+        }
+        loadModels();
+    </script>
+</body>
+
+</html>

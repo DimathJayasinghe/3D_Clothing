@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+python-multipart
+aiosqlite
+httpx
+trimesh
+python-dotenv
+numpy
